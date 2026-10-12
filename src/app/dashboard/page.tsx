@@ -3,6 +3,8 @@ import { getSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { getAccountInformation, getPositions } from '@/lib/metaapi';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   const session = await getSession();
   if (!session.userId) {
