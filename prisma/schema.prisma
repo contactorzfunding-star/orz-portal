@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  isFounder     Boolean   @default(false)
+  attemptsLeft  Int       @default(3)
+  createdAt     DateTime  @default(now())
+  accounts      Account[]
+  otps          Otp[]
+}
+
+model Account {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id])
+  phase                 Int      @default(1) // 1 or 2
+  status                String   @default("active") // active, failed, suspended, passed, pending
+  mt5Login              String?
+  mt5Server             String?
+  mt5InvestorPassword   String?  // encrypted
+  metaapiAccountId      String?  // ID en MetaApi Cloud
+  initialBalance        Float    @default(10000) // example, adjust per product
+  currentBalance        Float?
+  currentEquity         Float?
+  dailyLossPercent      Float    @default(0)
+  maxDrawdownPercent    Float    @default(0)
+  lastTradeDate         DateTime?
+  daysTraded            Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  notices               String[] @default([])
+}
+
+model Otp {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model FounderSpot {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  claimed   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
