@@ -1,11 +1,14 @@
 import { redirect } from 'next/navigation';
+import { connection } from 'next/server';
 import { getSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { getAccountInformation, getPositions } from '@/lib/metaapi';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function DashboardPage() {
+  await connection();
   const session = await getSession();
   if (!session.userId) {
     redirect('/login');
@@ -22,14 +25,14 @@ export default async function DashboardPage() {
 
   const account = user.accounts[0];
 
-  let liveData = null;
+  let liveData: { balance?: number; equity?: number } | null = null;
   let riskWarnings: string[] = [];
   if (account?.mt5Login && account.mt5InvestorPassword) {
     try {
       const metaId = account.metaapiAccountId || account.mt5Login;
       liveData = await getAccountInformation(metaId);
       const positions = await getPositions(metaId);
-      positions.forEach((pos: any) => {
+      positions.forEach((pos: { id?: string; profit?: number; stopLoss?: number }) => {
         const risk = Math.abs(pos.profit || 0) / (account.initialBalance || 10000) * 100;
         if (risk > 2) riskWarnings.push(`Operación ${pos.id} supera 2% de riesgo`);
         if (!pos.stopLoss) riskWarnings.push(`Operación ${pos.id} sin Stop Loss`);
@@ -40,7 +43,7 @@ export default async function DashboardPage() {
   }
 
   let statusLabel = account?.status || 'pendiente';
-  if (liveData) {
+  if (liveData && account) {
     const balance = liveData.balance || account.currentBalance || account.initialBalance;
     const dailyLoss = ((account.initialBalance - balance) / account.initialBalance) * 100;
     if (dailyLoss > 5 || (account.maxDrawdownPercent || 0) > 10) {
