@@ -7,6 +7,8 @@ export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [message, setMessage] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const login = async () => {
     const res = await fetch('/api/admin/login', {
@@ -27,6 +29,28 @@ export default function AdminPage() {
     if (res.ok) {
       const data = await res.json();
       setAccounts(data);
+    }
+  };
+
+  const createUser = async () => {
+    setCreating(true);
+    setMessage('');
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newEmail, isFounder: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setNewEmail('');
+        setMessage('Cliente creado. Ya puede pedir código.');
+        loadAccounts();
+      } else {
+        setMessage(data.error || 'Error');
+      }
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -61,6 +85,28 @@ export default function AdminPage() {
   return (
     <div className="p-4 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Administración ORZ Funding</h1>
+
+      <div className="border border-white/20 p-4 mb-8">
+        <h2 className="text-lg mb-3">Dar de alta cliente</h2>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="correo@cliente.com"
+            className="flex-1 px-3 py-2"
+          />
+          <button
+            onClick={createUser}
+            disabled={creating || !newEmail}
+            className="px-4 py-2 bg-white text-black"
+          >
+            {creating ? 'Creando...' : 'Crear'}
+          </button>
+        </div>
+        {message && <p className="mt-2 text-sm">{message}</p>}
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>

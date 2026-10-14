@@ -1,8 +1,14 @@
 import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex').slice(0, 32), 'utf8'); // 32 bytes
-// In production set ENCRYPTION_KEY to a 32-byte string or hex
+
+function getKey(): Buffer {
+  const raw = process.env.ENCRYPTION_KEY || 'orzfundingkey2026portalclave32xx';
+  const padded = raw.padEnd(32, '0').slice(0, 32);
+  return Buffer.from(padded, 'utf8');
+}
+
+const KEY = getKey();
 
 export function encrypt(text: string): string {
   const iv = crypto.randomBytes(12);
