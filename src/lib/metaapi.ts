@@ -1,42 +1,82 @@
-const METAAPI_TOKEN = process.env.METAAPI_TOKEN!;
-const BASE_URL = 'https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai'; // example base, adjust to actual MetaApi endpoint
+const TOKEN = process.env.METAAPI_TOKEN || '';
+const PROVISIONING = 'https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai';
 
-// Note: Actual MetaApi base URLs are region-specific, e.g. https://mt-client-api-v1.new-york.agiliumtrade.ai
-// Use the one from your MetaApi dashboard.
+function headers() {
+  return {
+    'auth-token': TOKEN,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+}
 
-export async function getAccountInformation(accountId: string) {
-  const res = await fetch(`${BASE_URL}/users/current/accounts/${accountId}/account-information`, {
+function clientBase(region?: string | null) {
+  return `https://mt-client-api-v1.${region || 'new-york'}.agiliumtrade.ai`;
+}
+
+export async function createMetaApiAccount(input: {
+  login: string;
+  password: string;
+  server: string;
+  name: string;
+}) {
+  if (!TOKEN) throw new Error('Falta METAAPI_TOKEN');
+  const res = await fetch(`${PROVISIONING}/users/current/accounts`, {
+    method: 'POST',
     headers: {
-      'auth-token': METAAPI_TOKEN,
-      'Content-Type': 'application/json',
+      ...headers(),
+      'transaction-id': crypto.randomUUID().replace(/-/g, ''),
     },
+    body: JSON.stringify({
+      name: input.name,
+      login: input.login,
+      password: input.password,
+      server: input.server,
+      platform: 'mt5',
+      magic: 1000,
+      type: 'cloud-g2',
+      region: 'new-york',
+    }),
   });
-  if (!res.ok) throw new Error(`MetaApi error: ${res.status}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok && res.status !== 202) {
+    throw new Error(data.message || data.error || `MetaApi ${res.status}`);
+  }
+  return data as { id?: string; _id?: string; state?: string; region?: string };
+}
+
+export async function deployMetaApiAccount(accountId: string) {
+  const res = await fetch(`${PROVISIONING}/users/current/accounts/${accountId}/deploy`, {
+    method: 'POST',
+    headers: headers(),
+  });
+  if (!res.ok && res.status !== 204 && res.status !== 202) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || `Deploy ${res.status}`);
+  }
+}
+
+export async function getMetaApiAccount(accountId: string) {
+  const res = await fetch(`${PROVISIONING}/users/current/accounts/${accountId}`, {
+    headers: headers(),
+  });
+  if (!res.ok) return null;
   return res.json();
 }
 
-export async function getPositions(accountId: string) {
-  const res = await fetch(`${BASE_URL}/users/current/accounts/${accountId}/positions`, {
-    headers: { 'auth-token': METAAPI_TOKEN },
-  });
+export async function getAccountInformation(accountId: string, region?: string | null) {
+  const res = await fetch(
+    `${clientBase(region)}/users/current/accounts/${accountId}/account-information`,
+    { headers: headers() }
+  );
+  if (!res.ok) throw new Error(`MetaApi info ${res.status}`);
+  return res.json();
+}
+
+export async function getPositions(accountId: string, region?: string | null) {
+  const res = await fetch(
+    `${clientBase(region)}/users/current/accounts/${accountId}/positions`,
+    { headers: headers() }
+  );
   if (!res.ok) return [];
-  return res.json();
-}
-
-export async function getHistoryDeals(accountId: string, startTime?: string) {
-  const url = new URL(`${BASE_URL}/users/current/accounts/${accountId}/history-deals/time`);
-  if (startTime) url.searchParams.set('startTime', startTime);
-  const res = await fetch(url.toString(), {
-    headers: { 'auth-token': METAAPI_TOKEN },
-  });
-  if (!res.ok) return [];
-  return res.json();
-}
-
-export async function listAccounts() {
-  const res = await fetch(`${BASE_URL}/users/current/accounts`, {
-    headers: { 'auth-token': METAAPI_TOKEN },
-  });
-  if (!res.ok) throw new Error('Failed to list MetaApi accounts');
   return res.json();
 }

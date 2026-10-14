@@ -10,28 +10,22 @@ export const revalidate = 0;
 export default async function DashboardPage() {
   await connection();
   const session = await getSession();
-  if (!session.userId) {
-    redirect('/login');
-  }
+  if (!session.userId) redirect('/login');
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
     include: { accounts: { orderBy: { createdAt: 'desc' } } },
   });
-
-  if (!user) {
-    redirect('/login');
-  }
+  if (!user) redirect('/login');
 
   const account = user.accounts[0];
-
   let liveData: { balance?: number; equity?: number } | null = null;
   let riskWarnings: string[] = [];
-  if (account?.mt5Login && account.mt5InvestorPassword) {
+
+  if (account?.metaapiAccountId) {
     try {
-      const metaId = account.metaapiAccountId || account.mt5Login;
-      liveData = await getAccountInformation(metaId);
-      const positions = await getPositions(metaId);
+      liveData = await getAccountInformation(account.metaapiAccountId, account.metaapiRegion);
+      const positions = await getPositions(account.metaapiAccountId, account.metaapiRegion);
       positions.forEach((pos: { id?: string; profit?: number; stopLoss?: number }) => {
         const risk = Math.abs(pos.profit || 0) / (account.initialBalance || 10000) * 100;
         if (risk > 2) riskWarnings.push(`Operación ${pos.id} supera 2% de riesgo`);
@@ -46,9 +40,7 @@ export default async function DashboardPage() {
   if (liveData && account) {
     const balance = liveData.balance || account.currentBalance || account.initialBalance;
     const dailyLoss = ((account.initialBalance - balance) / account.initialBalance) * 100;
-    if (dailyLoss > 5 || (account.maxDrawdownPercent || 0) > 10) {
-      statusLabel = 'Reprobada';
-    }
+    if (dailyLoss > 5 || (account.maxDrawdownPercent || 0) > 10) statusLabel = 'Reprobada';
   }
 
   return (
@@ -57,7 +49,6 @@ export default async function DashboardPage() {
       {user.isFounder && (
         <p className="text-sm mb-4 border border-white/20 inline-block px-3 py-1">Acceso Fundador · Reparto 90/10 · Intentos: {user.attemptsLeft}</p>
       )}
-
       <div className="border border-white/20 p-4 mb-6">
         <h2 className="text-xl font-semibold mb-3">Estado del Reto</h2>
         {account ? (
@@ -71,18 +62,16 @@ export default async function DashboardPage() {
                 <p><strong>Equity:</strong> ${liveData.equity?.toLocaleString() || '—'}</p>
               </>
             )}
-            <p className="mt-2 text-sm text-white/70">
-              Objetivo Fase 1: 8% · Fase 2: 5% · Mínimo 3 días · Sin límite de tiempo
-            </p>
-            <p className="text-sm text-white/70">
-              Pérdida diaria máxima 5% · Pérdida máxima 10% (sobre balance)
-            </p>
+            {!account.metaapiAccountId && (
+              <p className="mt-2 text-sm text-white/60">MetaTrader aún no está conectado.</p>
+            )}
+            <p className="mt-2 text-sm text-white/70">Objetivo Fase 1: 8% · Fase 2: 5% · Mínimo 3 días · Sin límite de tiempo</p>
+            <p className="text-sm text-white/70">Pérdida diaria máxima 5% · Pérdida máxima 10% (sobre balance)</p>
           </>
         ) : (
-          <p>No hay cuenta activa. Contacta soporte si acabas de comprar.</p>
+          <p>No hay cuenta activa.</p>
         )}
       </div>
-
       {riskWarnings.length > 0 && (
         <div className="border border-yellow-500/50 p-4 mb-6">
           <h3 className="font-semibold mb-2">Advertencias</h3>
@@ -91,7 +80,6 @@ export default async function DashboardPage() {
           </ul>
         </div>
       )}
-
       <div className="border border-white/20 p-4 text-sm">
         <h3 className="font-semibold mb-2">Reglas</h3>
         <ul className="space-y-1 text-white/80">

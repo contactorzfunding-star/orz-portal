@@ -21,13 +21,14 @@ model Account {
   id                    String   @id @default(cuid())
   userId                String
   user                  User     @relation(fields: [userId], references: [id])
-  phase                 Int      @default(1) // 1 or 2
-  status                String   @default("active") // active, failed, suspended, passed, pending
+  phase                 Int      @default(1)
+  status                String   @default("active")
   mt5Login              String?
   mt5Server             String?
-  mt5InvestorPassword   String?  // encrypted
-  metaapiAccountId      String?  // ID en MetaApi Cloud
-  initialBalance        Float    @default(10000) // example, adjust per product
+  mt5InvestorPassword   String?
+  metaapiAccountId      String?
+  metaapiRegion         String?  @default("new-york")
+  initialBalance        Float    @default(10000)
   currentBalance        Float?
   currentEquity         Float?
   dailyLossPercent      Float    @default(0)
