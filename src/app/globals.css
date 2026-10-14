@@ -114,6 +114,15 @@ h2 {
   margin-bottom: 16px;
 }
 
+.chart { width: 100%; height: auto; display: block; margin-top: 12px; }
+.curve { fill: none; stroke: #fff; stroke-width: 2; }
+.dot { fill: #fff; }
+.guide { stroke-width: 1; stroke-dasharray: 4 6; }
+.guide.goal { stroke: #fff; }
+.guide.daily { stroke: rgba(255,255,255,.45); }
+.guide.loss { stroke: rgba(255,255,255,.25); }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: rgba(255,255,255,.7); margin-top: 8px; }
+
 .meter {
   height: 6px;
   background: rgba(255,255,255,.15);

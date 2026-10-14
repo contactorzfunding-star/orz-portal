@@ -80,3 +80,14 @@ export async function getPositions(accountId: string, region?: string | null) {
   if (!res.ok) return [];
   return res.json();
 }
+
+export async function getDeals(accountId: string, region?: string | null, start?: string) {
+  const from = start || new Date(Date.now() - 1000 * 60 * 60 * 24 * 90).toISOString();
+  const to = new Date().toISOString();
+  const res = await fetch(
+    `${clientBase(region)}/users/current/accounts/${accountId}/history-deals/time/${from}/${to}`,
+    { headers: headers() }
+  );
+  if (!res.ok) return [];
+  return res.json();
+}

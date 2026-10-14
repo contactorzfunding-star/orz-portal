@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
 import { getSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
-import { getAccountInformation } from '@/lib/metaapi';
+import { getAccountInformation, getDeals } from '@/lib/metaapi';
+import { EquityChart } from '@/components/EquityChart';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -28,11 +29,23 @@ export default async function DashboardPage() {
 
   let balance = account?.currentBalance || initial;
   let equity = account?.currentEquity || balance;
+  let points = [{ t: 'inicio', v: initial }];
+
   if (account?.metaapiAccountId) {
     try {
       const live = await getAccountInformation(account.metaapiAccountId, account.metaapiRegion);
       balance = live.balance ?? balance;
       equity = live.equity ?? equity;
+      const deals = await getDeals(account.metaapiAccountId, account.metaapiRegion, account.createdAt.toISOString());
+      const closed = (deals || [])
+        .filter((d: { entryType?: string; profit?: number; time?: string }) => d.entryType === 'DEAL_ENTRY_OUT' || d.profit)
+        .sort((a: { time?: string }, b: { time?: string }) => new Date(a.time || 0).getTime() - new Date(b.time || 0).getTime());
+      let running = initial;
+      for (const deal of closed) {
+        running += Number(deal.profit || 0) + Number(deal.commission || 0) + Number(deal.swap || 0);
+        points.push({ t: deal.time || String(points.length), v: running });
+      }
+      points.push({ t: 'ahora', v: balance });
     } catch (e) {
       console.error('MetaApi', e);
     }
@@ -60,18 +73,23 @@ export default async function DashboardPage() {
       </div>
 
       <section className="card">
-        <h2>Estado del reto</h2>
-        <p>Fase {account?.phase || 1} · {status}</p>
-        <p className="kicker" style={{ marginTop: 18 }}>Avance al objetivo {Math.round(goal * 100)}%</p>
-        <div className="meter"><i style={{ ['--w' as string]: `${progress}%` }} /></div>
-        <p>{profit >= 0 ? '+' : ''}{profitPct.toFixed(2)}% sobre el balance inicial.</p>
+        <h2>Avance</h2>
+        <p>Fase {account?.phase || 1} · {status} · {profit >= 0 ? '+' : ''}{profitPct.toFixed(2)}%</p>
+        <EquityChart points={points} initial={initial} goal={goal} />
+        <div className="legend">
+          <span>Objetivo {Math.round(goal * 100)}%</span>
+          <span>Pérdida diaria 5%</span>
+          <span>Pérdida máxima 10%</span>
+        </div>
         {!account?.metaapiAccountId && (
-          <p style={{ color: 'rgba(255,255,255,.65)' }}>MetaTrader aún no está conectado. Cuando se entreguen las credenciales, aquí se ven las métricas.</p>
+          <p style={{ color: 'rgba(255,255,255,.65)' }}>MetaTrader aún no está conectado. La gráfica se llena cuando hay operaciones.</p>
         )}
       </section>
 
       <section className="card">
         <h2>Límites</h2>
+        <p className="kicker">Avance al objetivo {Math.round(goal * 100)}%</p>
+        <div className="meter"><i style={{ ['--w' as string]: `${progress}%` }} /></div>
         <p className="kicker">Pérdida diaria 5% sobre balance</p>
         <div className="meter"><i style={{ ['--w' as string]: `${Math.min(100, (dailyLoss / 5) * 100)}%` }} /></div>
         <p className="kicker">Pérdida máxima 10% sobre balance</p>
