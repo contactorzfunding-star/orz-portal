@@ -44,15 +44,15 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-2">Hola, {user.email}</h1>
-      {user.isFounder && (
-        <p className="text-sm mb-4 border border-white/20 inline-block px-3 py-1">Acceso Fundador · Reparto 90/10 · Intentos: {user.attemptsLeft}</p>
-      )}
-      <div className="border border-white/20 p-4 mb-6">
-        <h2 className="text-xl font-semibold mb-3">Estado del Reto</h2>
+    <div className="flex justify-center px-4 py-10">
+      <div className="sheet" style={{ width: 'min(720px, 100%)' }}>
+        <p className="kicker">ORZ Funding</p>
+        <h1>Hola, {user.email}</h1>
+        {user.isFounder && (
+          <p className="text-sm mb-6 border border-white/30 inline-block px-3 py-1 rounded-full">Acceso Fundador · 90/10 · Intentos: {user.attemptsLeft}</p>
+        )}
         {account ? (
-          <>
+          <div className="space-y-2 text-sm">
             <p><strong>Fase:</strong> {account.phase}</p>
             <p><strong>Estado:</strong> {statusLabel}</p>
             <p><strong>Balance inicial:</strong> ${account.initialBalance.toLocaleString()}</p>
@@ -62,33 +62,18 @@ export default async function DashboardPage() {
                 <p><strong>Equity:</strong> ${liveData.equity?.toLocaleString() || '—'}</p>
               </>
             )}
-            {!account.metaapiAccountId && (
-              <p className="mt-2 text-sm text-white/60">MetaTrader aún no está conectado.</p>
-            )}
-            <p className="mt-2 text-sm text-white/70">Objetivo Fase 1: 8% · Fase 2: 5% · Mínimo 3 días · Sin límite de tiempo</p>
-            <p className="text-sm text-white/70">Pérdida diaria máxima 5% · Pérdida máxima 10% (sobre balance)</p>
-          </>
+            {!account.metaapiAccountId && <p className="text-white/60 mt-3">MetaTrader aún no está conectado.</p>}
+            <p className="text-white/70 mt-4">Objetivo Fase 1: 8% · Fase 2: 5% · Mínimo 3 días · Sin límite de tiempo</p>
+            <p className="text-white/70">Pérdida diaria máxima 5% · Pérdida máxima 10% (sobre balance)</p>
+          </div>
         ) : (
           <p>No hay cuenta activa.</p>
         )}
-      </div>
-      {riskWarnings.length > 0 && (
-        <div className="border border-yellow-500/50 p-4 mb-6">
-          <h3 className="font-semibold mb-2">Advertencias</h3>
-          <ul className="list-disc list-inside text-sm">
+        {riskWarnings.length > 0 && (
+          <ul className="mt-6 text-sm list-disc list-inside">
             {riskWarnings.map((w, i) => <li key={i}>{w}</li>)}
           </ul>
-        </div>
-      )}
-      <div className="border border-white/20 p-4 text-sm">
-        <h3 className="font-semibold mb-2">Reglas</h3>
-        <ul className="space-y-1 text-white/80">
-          <li>• Riesgo máximo 2% por operación. Sin stop loss: advertencia.</li>
-          <li>• Relación 1 a 2 solo informativa.</li>
-          <li>• Noticias permitidas. Cerrar antes del fin de semana.</li>
-          <li>• 7 días sin operar: Suspendida.</li>
-          <li>• Copy prohibido. Robot solo si cumple reglas.</li>
-        </ul>
+        )}
       </div>
     </div>
   );
