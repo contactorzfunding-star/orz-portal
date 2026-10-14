@@ -9,6 +9,7 @@ export default function AdminPage() {
   const [message, setMessage] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [creating, setCreating] = useState(false);
+  const [connecting, setConnecting] = useState('');
 
   const login = async () => {
     const res = await fetch('/api/admin/login', {
@@ -26,10 +27,7 @@ export default function AdminPage() {
 
   const loadAccounts = async () => {
     const res = await fetch('/api/admin/accounts');
-    if (res.ok) {
-      const data = await res.json();
-      setAccounts(data);
-    }
+    if (res.ok) setAccounts(await res.json());
   };
 
   const createUser = async () => {
@@ -46,9 +44,7 @@ export default function AdminPage() {
         setNewEmail('');
         setMessage('Cliente creado. Ya puede pedir código.');
         loadAccounts();
-      } else {
-        setMessage(data.error || 'Error');
-      }
+      } else setMessage(data.error || 'Error');
     } finally {
       setCreating(false);
     }
@@ -63,18 +59,31 @@ export default function AdminPage() {
     loadAccounts();
   };
 
+  const connectMeta = async (id: string) => {
+    setConnecting(id);
+    setMessage('');
+    try {
+      const res = await fetch('/api/admin/metaapi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage('MetaApi conectado. En unos minutos se ven las métricas.');
+        loadAccounts();
+      } else setMessage(data.error || 'Error');
+    } finally {
+      setConnecting('');
+    }
+  };
+
   if (!authenticated) {
     return (
       <div className="flex items-center justify-center min-h-[60vh] px-4">
         <div className="w-full max-w-sm border border-white/20 p-6">
           <h1 className="text-xl font-bold mb-4">Panel de Administración</h1>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Contraseña de admin"
-            className="w-full px-3 py-2 mb-4"
-          />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña de admin" className="w-full px-3 py-2 mb-4" />
           <button onClick={login} className="w-full py-2 bg-white text-black">Entrar</button>
           {message && <p className="mt-2 text-sm text-red-400">{message}</p>}
         </div>
@@ -85,28 +94,14 @@ export default function AdminPage() {
   return (
     <div className="p-4 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Administración ORZ Funding</h1>
-
       <div className="border border-white/20 p-4 mb-8">
         <h2 className="text-lg mb-3">Dar de alta cliente</h2>
         <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            placeholder="correo@cliente.com"
-            className="flex-1 px-3 py-2"
-          />
-          <button
-            onClick={createUser}
-            disabled={creating || !newEmail}
-            className="px-4 py-2 bg-white text-black"
-          >
-            {creating ? 'Creando...' : 'Crear'}
-          </button>
+          <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="correo@cliente.com" className="flex-1 px-3 py-2" />
+          <button onClick={createUser} disabled={creating || !newEmail} className="px-4 py-2 bg-white text-black">{creating ? 'Creando...' : 'Crear'}</button>
         </div>
         {message && <p className="mt-2 text-sm">{message}</p>}
       </div>
-
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
@@ -125,29 +120,13 @@ export default function AdminPage() {
                 <td className="p-2">{acc.user.email}</td>
                 <td className="p-2">{acc.phase}</td>
                 <td className="p-2">{acc.status}</td>
-                <td className="p-2">
-                  <input
-                    defaultValue={acc.mt5Login || ''}
-                    onBlur={(e) => updateAccount(acc.id, { mt5Login: e.target.value })}
-                    className="w-24 px-1"
-                  />
-                </td>
-                <td className="p-2">
-                  <input
-                    defaultValue={acc.mt5Server || ''}
-                    onBlur={(e) => updateAccount(acc.id, { mt5Server: e.target.value })}
-                    className="w-32 px-1"
-                  />
-                </td>
-                <td className="p-2">
-                  <input
-                    type="password"
-                    placeholder="Pass inversionista"
-                    onBlur={(e) => {
-                      if (e.target.value) updateAccount(acc.id, { mt5InvestorPassword: e.target.value });
-                    }}
-                    className="w-32 px-1"
-                  />
+                <td className="p-2"><input defaultValue={acc.mt5Login || ''} onBlur={(e) => updateAccount(acc.id, { mt5Login: e.target.value })} className="w-24 px-1" /></td>
+                <td className="p-2"><input defaultValue={acc.mt5Server || ''} onBlur={(e) => updateAccount(acc.id, { mt5Server: e.target.value })} className="w-32 px-1" /></td>
+                <td className="p-2 space-y-2">
+                  <input type="password" placeholder="Pass inversionista" onBlur={(e) => { if (e.target.value) updateAccount(acc.id, { mt5InvestorPassword: e.target.value }); }} className="w-32 px-1" />
+                  <button onClick={() => connectMeta(acc.id)} disabled={connecting === acc.id} className="block px-2 py-1 bg-white text-black text-xs">
+                    {connecting === acc.id ? 'Conectando...' : acc.metaapiAccountId ? 'Reconectar' : 'Conectar MetaApi'}
+                  </button>
                 </td>
               </tr>
             ))}
