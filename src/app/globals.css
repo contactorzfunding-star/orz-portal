@@ -197,8 +197,50 @@ input.code { text-align: center; font-size: 28px; letter-spacing: .3em; }
   text-align: center;
 }
 
+.admin .row {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: 12px;
+  align-items: center;
+}
+
+.client-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.client-top h2 { margin: 0; font-size: 28px; word-break: break-word; }
+.client-top .badge { margin: 0; }
+
+.fields {
+  display: grid;
+  gap: 12px;
+}
+
+.fields label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.65);
+}
+
+.fields input { margin-top: 6px; }
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 @media (max-width: 760px) {
   .logo { height: 46px; }
   .grid { grid-template-columns: 1fr; }
   .card, .sheet { padding: 22px 18px; border-radius: 22px; }
+  .admin .row, .actions { grid-template-columns: 1fr; }
+  .client-top { flex-direction: column; }
 }
