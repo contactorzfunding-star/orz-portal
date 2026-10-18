@@ -30,8 +30,10 @@ export default async function DashboardPage() {
   let balance = account?.currentBalance || initial;
   let equity = account?.currentEquity || balance;
   let points = [{ t: 'inicio', v: initial }];
+  let lastTrade: Date | null = account?.lastTradeDate || null;
+  let status = account?.status || 'pendiente';
 
-  if (account?.metaapiAccountId) {
+  if (account?.metaapiAccountId && status !== 'reprobada') {
     try {
       const live = await getAccountInformation(account.metaapiAccountId, account.metaapiRegion);
       balance = live.balance ?? balance;
@@ -44,8 +46,29 @@ export default async function DashboardPage() {
       for (const deal of closed) {
         running += Number(deal.profit || 0) + Number(deal.commission || 0) + Number(deal.swap || 0);
         points.push({ t: deal.time || String(points.length), v: running });
+        if (deal.time) lastTrade = new Date(deal.time);
       }
       points.push({ t: 'ahora', v: balance });
+
+      const lossPct = Math.max(0, ((initial - balance) / initial) * 100);
+      const daysIdle = lastTrade
+        ? (Date.now() - lastTrade.getTime()) / (1000 * 60 * 60 * 24)
+        : (Date.now() - account.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (lossPct >= 10) status = 'reprobada';
+      else if (daysIdle >= 7) status = 'suspendida';
+
+      await prisma.account.update({
+        where: { id: account.id },
+        data: {
+          currentBalance: balance,
+          currentEquity: equity,
+          maxDrawdownPercent: Math.max(account.maxDrawdownPercent || 0, lossPct),
+          dailyLossPercent: lossPct,
+          lastTradeDate: lastTrade,
+          status,
+        },
+      });
     } catch (e) {
       console.error('MetaApi', e);
     }
@@ -54,8 +77,7 @@ export default async function DashboardPage() {
   const profit = balance - initial;
   const profitPct = (profit / initial) * 100;
   const progress = Math.max(0, Math.min(100, (profitPct / (goal * 100)) * 100));
-  const dailyLoss = Math.max(0, ((initial - balance) / initial) * 100);
-  const status = dailyLoss > 5 || (account?.maxDrawdownPercent || 0) > 10 ? 'Reprobada' : account?.status || 'pendiente';
+  const lossPct = Math.max(0, ((initial - balance) / initial) * 100);
 
   return (
     <div className="page">
@@ -81,6 +103,12 @@ export default async function DashboardPage() {
           <span>Pérdida diaria 5%</span>
           <span>Pérdida máxima 10%</span>
         </div>
+        {status === 'reprobada' && (
+          <p>Cuenta reprobada. La pérdida llegó al 10% sobre balance.</p>
+        )}
+        {status === 'suspendida' && (
+          <p>Cuenta suspendida. Pasaron 7 días sin operar.</p>
+        )}
         {!account?.metaapiAccountId && (
           <p style={{ color: 'rgba(255,255,255,.65)' }}>MetaTrader aún no está conectado. La gráfica se llena cuando hay operaciones.</p>
         )}
@@ -90,10 +118,8 @@ export default async function DashboardPage() {
         <h2>Límites</h2>
         <p className="kicker">Avance al objetivo {Math.round(goal * 100)}%</p>
         <div className="meter"><i style={{ ['--w' as string]: `${progress}%` }} /></div>
-        <p className="kicker">Pérdida diaria 5% sobre balance</p>
-        <div className="meter"><i style={{ ['--w' as string]: `${Math.min(100, (dailyLoss / 5) * 100)}%` }} /></div>
-        <p className="kicker">Pérdida máxima 10% sobre balance</p>
-        <div className="meter"><i style={{ ['--w' as string]: `${Math.min(100, ((account?.maxDrawdownPercent || dailyLoss) / 10) * 100)}%` }} /></div>
+        <p className="kicker">Pérdida sobre balance. Máxima 10%</p>
+        <div className="meter"><i style={{ ['--w' as string]: `${Math.min(100, (lossPct / 10) * 100)}%` }} /></div>
       </section>
 
       <section className="card facts">
