@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function isTrade(d: { type?: string; entryType?: string; profit?: number }) {
@@ -18,6 +18,28 @@ function isTrade(d: { type?: string; entryType?: string; profit?: number }) {
   if (d.entryType === 'DEAL_ENTRY_IN' || d.entryType === 'DEAL_ENTRY_OUT' || d.entryType === 'DEAL_ENTRY_INOUT') return true;
   return false;
 }
+
+type Deal = {
+  type?: string;
+  entryType?: string;
+  profit?: number;
+  commission?: number;
+  swap?: number;
+  time?: string;
+  symbol?: string;
+  volume?: number;
+  id?: string;
+};
+
+type Position = {
+  symbol?: string;
+  type?: string;
+  volume?: number;
+  profit?: number;
+  openPrice?: number;
+  currentPrice?: number;
+  id?: string;
+};
 
 export default async function DashboardPage() {
   await connection();
@@ -40,7 +62,8 @@ export default async function DashboardPage() {
   let lastTrade: Date | null = account?.lastTradeDate || null;
   let status = account?.status || 'active';
   let hasTrades = false;
-  let openCount = 0;
+  let openPositions: Position[] = [];
+  let recentDeals: Deal[] = [];
 
   if (account?.metaapiAccountId) {
     try {
@@ -48,20 +71,20 @@ export default async function DashboardPage() {
       balance = Number(live.balance ?? balance);
       equity = Number(live.equity ?? equity);
 
-      // Solo la primera vez: el balance actual es el inicial.
       if (!initial || initial === 10000) {
         initial = balance;
       }
 
       const positions = await getPositions(account.metaapiAccountId, account.metaapiRegion);
-      openCount = Array.isArray(positions) ? positions.length : 0;
+      openPositions = Array.isArray(positions) ? positions : [];
 
       const deals = await getDeals(account.metaapiAccountId, account.metaapiRegion, account.createdAt.toISOString());
       const trades = (Array.isArray(deals) ? deals : [])
         .filter(isTrade)
-        .sort((a: { time?: string }, b: { time?: string }) => new Date(a.time || 0).getTime() - new Date(b.time || 0).getTime());
+        .sort((a: Deal, b: Deal) => new Date(a.time || 0).getTime() - new Date(b.time || 0).getTime());
 
-      hasTrades = trades.length > 0 || openCount > 0;
+      recentDeals = trades.slice().reverse().slice(0, 20);
+      hasTrades = trades.length > 0 || openPositions.length > 0;
 
       points = [{ t: 'inicio', v: initial }];
       let running = initial;
@@ -122,25 +145,52 @@ export default async function DashboardPage() {
 
       <section className="card">
         <h2>Avance</h2>
-        <p>Fase {account?.phase || 1} · {status} · {profit >= 0 ? '+' : ''}{profitPct.toFixed(2)}%</p>
+        <p>Fase {account?.phase || 1} · {status} · {profit >= 0 ? '+' : ''}{money(profit)} ({profitPct.toFixed(2)}%)</p>
         <EquityChart points={points} initial={initial} goal={goal} />
         <div className="legend">
           <span>Objetivo {Math.round(goal * 100)}%</span>
           <span>Pérdida diaria 5%</span>
           <span>Pérdida máxima 10%</span>
         </div>
-        {openCount > 0 && <p>Operaciones abiertas: {openCount}</p>}
-        {!hasTrades && account?.metaapiAccountId && (
-          <p style={{ color: 'rgba(255,255,255,.65)' }}>Aún no hay operaciones cerradas. El avance se calcula con el balance.</p>
-        )}
-        {status === 'reprobada' && (
-          <p>Cuenta reprobada. La pérdida llegó al 10% sobre balance.</p>
-        )}
-        {status === 'suspendida' && (
-          <p>Cuenta suspendida. Pasaron 7 días sin operar.</p>
-        )}
+        {status === 'reprobada' && <p>Cuenta reprobada. La pérdida llegó al 10% sobre balance.</p>}
+        {status === 'suspendida' && <p>Cuenta suspendida. Pasaron 7 días sin operar.</p>}
         {!account?.metaapiAccountId && (
           <p style={{ color: 'rgba(255,255,255,.65)' }}>MetaTrader aún no está conectado.</p>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Operaciones abiertas</h2>
+        {openPositions.length === 0 ? (
+          <p style={{ color: 'rgba(255,255,255,.65)' }}>No hay operaciones abiertas.</p>
+        ) : (
+          <div style={{ display: 'grid', gap: 10 }}>
+            {openPositions.map((p) => (
+              <div key={p.id || p.symbol} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                <span>{p.symbol} · {p.type} · {p.volume}</span>
+                <b>{money(Number(p.profit || 0))}</b>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Operaciones recientes</h2>
+        {recentDeals.length === 0 ? (
+          <p style={{ color: 'rgba(255,255,255,.65)' }}>Aún no hay operaciones.</p>
+        ) : (
+          <div style={{ display: 'grid', gap: 10 }}>
+            {recentDeals.map((d) => {
+              const net = Number(d.profit || 0) + Number(d.commission || 0) + Number(d.swap || 0);
+              return (
+                <div key={d.id || d.time} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span>{d.symbol} · {d.type} · {d.volume}</span>
+                  <b>{money(net)}</b>
+                </div>
+              );
+            })}
+          </div>
         )}
       </section>
 
