@@ -22,6 +22,7 @@ type Live = {
   dailyStart: number;
   positions: Position[];
   status?: string;
+  ts?: number;
 };
 
 export function LivePanel({
@@ -47,6 +48,7 @@ export function LivePanel({
     positions: initialPositions,
     status,
   });
+  const [live, setLive] = useState(false);
 
   useEffect(() => {
     let on = true;
@@ -59,13 +61,15 @@ export function LivePanel({
         try {
           const json = JSON.parse(e.data);
           setData((prev) => ({ ...prev, ...json }));
+          setLive(true);
         } catch {
           // ignora
         }
       };
       source.onerror = () => {
+        setLive(false);
         source?.close();
-        if (on) setTimeout(connect, 1000);
+        if (on) setTimeout(connect, 800);
       };
     }
 
@@ -93,13 +97,13 @@ export function LivePanel({
       </div>
 
       <section className="card">
-        <h2>En vivo</h2>
+        <h2>En vivo {live && <span style={{ fontSize: 12, letterSpacing: '.08em', color: 'rgba(255,255,255,.55)' }}>· ACTUALIZANDO</span>}</h2>
         <p>Ganancia cerrada: {profit >= 0 ? '+' : ''}{money(profit)} ({pct.toFixed(2)}%)</p>
         <p>Flotante: {floating >= 0 ? '+' : ''}{money(floating)}</p>
         <p style={{ marginTop: 10 }}>Faltan {money(remainingDaily)} ({remainingPct.toFixed(2)}%) para el límite diario del 5%.</p>
         {data.status === 'suspendida' && <p>Cuenta suspendida.</p>}
         {data.status === 'reprobada' && <p>Cuenta reprobada.</p>}
-        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Canal en vivo. Se mueve cuando cambia MetaTrader.</p>
+        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Se mueve al ritmo de MetaTrader (cada ~100 ms).</p>
       </section>
 
       <section className="card">
