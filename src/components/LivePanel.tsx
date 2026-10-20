@@ -49,14 +49,30 @@ export function LivePanel({
     status,
   });
   const [live, setLive] = useState(false);
+  const [sourceLabel, setSourceLabel] = useState('local');
 
   useEffect(() => {
     let on = true;
     let source: EventSource | null = null;
     let emptyStreak = 0;
 
-    function connect() {
-      source = new EventSource('/api/live/stream');
+    async function connect() {
+      let url = '/api/live/stream';
+      try {
+        const res = await fetch('/api/live/token');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.url) {
+            url = json.url;
+            setSourceLabel('en vivo');
+          }
+        }
+      } catch {
+        // fallback al canal local
+      }
+
+      if (!on) return;
+      source = new EventSource(url);
       source.onmessage = (e) => {
         if (!on) return;
         try {
@@ -81,7 +97,7 @@ export function LivePanel({
       source.onerror = () => {
         setLive(false);
         source?.close();
-        if (on) setTimeout(connect, 800);
+        if (on) setTimeout(connect, 1500);
       };
     }
 
@@ -109,13 +125,13 @@ export function LivePanel({
       </div>
 
       <section className="card">
-        <h2>En vivo {live && <span style={{ fontSize: 12, letterSpacing: '.08em', color: 'rgba(255,255,255,.55)' }}>· ACTUALIZANDO</span>}</h2>
+        <h2>En vivo {live && <span style={{ fontSize: 12, letterSpacing: '.08em', color: 'rgba(255,255,255,.55)' }}>· {sourceLabel.toUpperCase()}</span>}</h2>
         <p>Ganancia cerrada: {profit >= 0 ? '+' : ''}{money(profit)} ({pct.toFixed(2)}%)</p>
         <p>Flotante: {floating >= 0 ? '+' : ''}{money(floating)}</p>
         <p style={{ marginTop: 10 }}>Faltan {money(remainingDaily)} ({remainingPct.toFixed(2)}%) para el límite diario del 5%.</p>
         {data.status === 'suspendida' && <p>Cuenta suspendida.</p>}
         {data.status === 'reprobada' && <p>Cuenta reprobada.</p>}
-        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Se mueve al ritmo de MetaTrader (cada ~10 ms).</p>
+        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Canal en vivo. Se mueve cuando cambia MetaTrader.</p>
       </section>
 
       <section className="card">
