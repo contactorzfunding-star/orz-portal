@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { getAccountInformation, getDeals, getPositions, closeAllPositions } from '@/lib/metaapi';
 import { EquityChart } from '@/components/EquityChart';
+import { LivePanel } from '@/components/LivePanel';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -75,7 +76,6 @@ export default async function DashboardPage() {
       balance = Number(live.balance ?? balance);
       equity = Number(live.equity ?? equity);
 
-      // El inicial solo se fija una vez, con el balance de ese momento.
       if (!initial) initial = balance;
 
       const positions = await getPositions(account.metaapiAccountId, account.metaapiRegion);
@@ -128,9 +128,7 @@ export default async function DashboardPage() {
     }
   }
 
-  const profit = balance - initial;
-  const profitPct = initial ? (profit / initial) * 100 : 0;
-  const floating = equity - balance;
+  const profitPct = initial ? ((balance - initial) / initial) * 100 : 0;
   const progress = Math.max(0, Math.min(100, (profitPct / (goal * 100)) * 100));
   const lossPct = initial ? Math.max(0, ((initial - balance) / initial) * 100) : 0;
 
@@ -143,48 +141,27 @@ export default async function DashboardPage() {
         <div className="badge">Acceso Fundador · Reparto 90/10 · Intentos {user.attemptsLeft}</div>
       )}
 
-      <div className="grid">
-        <div className="tile"><span>Balance inicial</span><b>{money(initial)}</b></div>
-        <div className="tile"><span>Balance</span><b>{money(balance)}</b></div>
-        <div className="tile"><span>Equity</span><b>{money(equity)}</b></div>
-      </div>
+      <LivePanel
+        initialBalance={balance}
+        initialEquity={equity}
+        initialStart={initial}
+        initialPositions={openPositions}
+      />
 
       <section className="card">
         <h2>Avance</h2>
         <p>Fase {account?.phase || 1} · {status}</p>
-        <p>Ganancia cerrada: {profit >= 0 ? '+' : ''}{money(profit)} ({profitPct.toFixed(2)}%)</p>
-        <p>Flotante: {floating >= 0 ? '+' : ''}{money(floating)}</p>
         <EquityChart points={points} initial={initial} goal={goal} />
         <div className="legend">
           <span>Objetivo {Math.round(goal * 100)}%</span>
           <span>Pérdida diaria 5%</span>
           <span>Pérdida máxima 10%</span>
         </div>
-        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Balance y equity salen directo de MetaTrader. El avance se mide sobre balance.</p>
         {status === 'reprobada' && <p>Cuenta reprobada. La pérdida llegó al 10% sobre balance. Las operaciones se cerraron.</p>}
         {status === 'suspendida' && <p>Cuenta suspendida. Pasaron 7 días sin operar. Las operaciones se cerraron.</p>}
         {closedByRule && <p>Se cerraron las posiciones abiertas por límite.</p>}
         {!account?.metaapiAccountId && (
           <p style={{ color: 'rgba(255,255,255,.65)' }}>MetaTrader aún no está conectado.</p>
-        )}
-      </section>
-
-      <section className="card">
-        <h2>Operaciones abiertas</h2>
-        {openPositions.length === 0 ? (
-          <p style={{ color: 'rgba(255,255,255,.65)' }}>No hay operaciones abiertas.</p>
-        ) : (
-          <div style={{ display: 'grid', gap: 10 }}>
-            {openPositions.map((p) => {
-              const pl = Number(p.unrealizedProfit ?? p.profit ?? 0);
-              return (
-                <div key={p.id || p.symbol} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span>{p.symbol} · {String(p.type || '').replace('POSITION_TYPE_', '')} · {p.volume}</span>
-                  <b>{money(pl)}</b>
-                </div>
-              );
-            })}
-          </div>
         )}
       </section>
 
