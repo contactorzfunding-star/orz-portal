@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
 import { getSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
-import { getAccountInformation, getDeals, getPositions } from '@/lib/metaapi';
+import { getAccountInformation, getDeals, getPositions, closeAllPositions } from '@/lib/metaapi';
 import { EquityChart } from '@/components/EquityChart';
 
 export const dynamic = 'force-dynamic';
@@ -64,6 +64,7 @@ export default async function DashboardPage() {
   let hasTrades = false;
   let openPositions: Position[] = [];
   let recentDeals: Deal[] = [];
+  let closedByRule = false;
 
   if (account?.metaapiAccountId) {
     try {
@@ -105,6 +106,17 @@ export default async function DashboardPage() {
       if (hasTrades && lossPct >= 10) status = 'reprobada';
       else if (hasTrades && daysIdle >= 7) status = 'suspendida';
       else if (status === 'reprobada' || status === 'pendiente') status = 'active';
+
+      // Cierra las operaciones abiertas si se pasó del límite.
+      if ((status === 'reprobada' || status === 'suspendida') && openPositions.length > 0) {
+        try {
+          await closeAllPositions(account.metaapiAccountId, account.metaapiRegion);
+          closedByRule = true;
+          openPositions = [];
+        } catch (e) {
+          console.error('Close', e);
+        }
+      }
 
       await prisma.account.update({
         where: { id: account.id },
@@ -152,8 +164,9 @@ export default async function DashboardPage() {
           <span>Pérdida diaria 5%</span>
           <span>Pérdida máxima 10%</span>
         </div>
-        {status === 'reprobada' && <p>Cuenta reprobada. La pérdida llegó al 10% sobre balance.</p>}
-        {status === 'suspendida' && <p>Cuenta suspendida. Pasaron 7 días sin operar.</p>}
+        {status === 'reprobada' && <p>Cuenta reprobada. La pérdida llegó al 10% sobre balance. Las operaciones se cerraron.</p>}
+        {status === 'suspendida' && <p>Cuenta suspendida. Pasaron 7 días sin operar. Las operaciones se cerraron.</p>}
+        {closedByRule && <p>Se cerraron las posiciones abiertas por límite.</p>}
         {!account?.metaapiAccountId && (
           <p style={{ color: 'rgba(255,255,255,.65)' }}>MetaTrader aún no está conectado.</p>
         )}
