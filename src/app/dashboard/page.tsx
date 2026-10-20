@@ -20,6 +20,11 @@ function isTrade(d: { type?: string; entryType?: string }) {
   return false;
 }
 
+function sameDay(a: Date | null | undefined, b: Date) {
+  if (!a) return false;
+  return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
+}
+
 type Deal = {
   type?: string;
   entryType?: string;
@@ -69,6 +74,9 @@ export default async function DashboardPage() {
   let openPositions: Position[] = [];
   let recentDeals: Deal[] = [];
   let closedByRule = false;
+  let dailyStart = account?.dailyStartBalance || balance || initial;
+  let dailyLossPct = 0;
+  let maxLossPct = 0;
 
   if (account?.metaapiAccountId) {
     try {
@@ -77,6 +85,13 @@ export default async function DashboardPage() {
       equity = Number(live.equity ?? equity);
 
       if (!initial) initial = balance;
+
+      const now = new Date();
+      if (!account.dailyStartDate || !sameDay(account.dailyStartDate, now)) {
+        dailyStart = balance;
+      } else {
+        dailyStart = account.dailyStartBalance || balance;
+      }
 
       const positions = await getPositions(account.metaapiAccountId, account.metaapiRegion);
       openPositions = Array.isArray(positions) ? positions : [];
@@ -92,12 +107,15 @@ export default async function DashboardPage() {
       points = [{ t: 'inicio', v: initial }];
       points.push({ t: 'ahora', v: balance });
 
-      const lossPct = Math.max(0, ((initial - balance) / initial) * 100);
+      maxLossPct = initial ? Math.max(0, ((initial - balance) / initial) * 100) : 0;
+      dailyLossPct = dailyStart ? Math.max(0, ((dailyStart - balance) / dailyStart) * 100) : 0;
+
       const daysIdle = lastTrade
         ? (Date.now() - lastTrade.getTime()) / (1000 * 60 * 60 * 24)
         : (Date.now() - account.createdAt.getTime()) / (1000 * 60 * 60 * 24);
 
-      if (hasTrades && lossPct >= 10) status = 'reprobada';
+      if (hasTrades && maxLossPct >= 10) status = 'reprobada';
+      else if (hasTrades && dailyLossPct >= 5) status = 'suspendida';
       else if (hasTrades && daysIdle >= 7) status = 'suspendida';
       else if (status === 'reprobada' || status === 'pendiente') status = 'active';
 
@@ -117,8 +135,10 @@ export default async function DashboardPage() {
           initialBalance: initial,
           currentBalance: balance,
           currentEquity: equity,
-          maxDrawdownPercent: Math.max(account.maxDrawdownPercent || 0, lossPct),
-          dailyLossPercent: lossPct,
+          maxDrawdownPercent: Math.max(account.maxDrawdownPercent || 0, maxLossPct),
+          dailyLossPercent: dailyLossPct,
+          dailyStartBalance: dailyStart,
+          dailyStartDate: now,
           lastTradeDate: lastTrade,
           status,
         },
@@ -130,7 +150,10 @@ export default async function DashboardPage() {
 
   const profitPct = initial ? ((balance - initial) / initial) * 100 : 0;
   const progress = Math.max(0, Math.min(100, (profitPct / (goal * 100)) * 100));
-  const lossPct = initial ? Math.max(0, ((initial - balance) / initial) * 100) : 0;
+  const remainingDailyUsd = Math.max(0, (dailyStart * 0.05) - Math.max(0, dailyStart - balance));
+  const remainingDailyPct = dailyStart ? Math.max(0, 5 - dailyLossPct) : 5;
+  const remainingMaxUsd = Math.max(0, (initial * 0.10) - Math.max(0, initial - balance));
+  const remainingMaxPct = Math.max(0, 10 - maxLossPct);
 
   return (
     <div className="page">
@@ -146,6 +169,8 @@ export default async function DashboardPage() {
         initialEquity={equity}
         initialStart={initial}
         initialPositions={openPositions}
+        dailyStart={dailyStart}
+        status={status}
       />
 
       <section className="card">
@@ -157,8 +182,9 @@ export default async function DashboardPage() {
           <span>Pérdida diaria 5%</span>
           <span>Pérdida máxima 10%</span>
         </div>
-        {status === 'reprobada' && <p>Cuenta reprobada. La pérdida llegó al 10% sobre balance. Las operaciones se cerraron.</p>}
-        {status === 'suspendida' && <p>Cuenta suspendida. Pasaron 7 días sin operar. Las operaciones se cerraron.</p>}
+        {status === 'reprobada' && <p>Cuenta reprobada. La pérdida llegó al 10% sobre balance. Las operaciones se cerraron en MetaTrader 5.</p>}
+        {status === 'suspendida' && dailyLossPct >= 5 && <p>Cuenta suspendida. Llegó al límite de pérdida diaria del 5% sobre balance. Las operaciones se cerraron en MetaTrader 5.</p>}
+        {status === 'suspendida' && dailyLossPct < 5 && <p>Cuenta suspendida. Pasaron 7 días sin operar. Las operaciones se cerraron.</p>}
         {closedByRule && <p>Se cerraron las posiciones abiertas por límite.</p>}
         {!account?.metaapiAccountId && (
           <p style={{ color: 'rgba(255,255,255,.65)' }}>MetaTrader aún no está conectado.</p>
@@ -187,13 +213,21 @@ export default async function DashboardPage() {
         <h2>Límites</h2>
         <p className="kicker">Avance al objetivo {Math.round(goal * 100)}%</p>
         <div className="meter"><i style={{ ['--w' as string]: `${progress}%` }} /></div>
-        <p className="kicker">Pérdida sobre balance. Máxima 10%</p>
-        <div className="meter"><i style={{ ['--w' as string]: `${Math.min(100, (lossPct / 10) * 100)}%` }} /></div>
+
+        <p className="kicker">Pérdida diaria sobre balance · límite 5%</p>
+        <div className="meter"><i style={{ ['--w' as string]: `${Math.min(100, (dailyLossPct / 5) * 100)}%` }} /></div>
+        <p>Faltan {money(remainingDailyUsd)} ({remainingDailyPct.toFixed(2)}%) para el 5% diario.</p>
+
+        <p className="kicker">Pérdida máxima sobre balance · límite 10%</p>
+        <div className="meter"><i style={{ ['--w' as string]: `${Math.min(100, (maxLossPct / 10) * 100)}%` }} /></div>
+        <p>Faltan {money(remainingMaxUsd)} ({remainingMaxPct.toFixed(2)}%) para el 10% máximo.</p>
       </section>
 
       <section className="card facts">
         <h2>Reglas</h2>
         <p>Objetivo Fase 1: 8%. Fase 2: 5%. Mínimo 3 días. Sin límite de tiempo.</p>
+        <p>Pérdida diaria 5% y máxima 10% sobre balance, no sobre equity.</p>
+        <p>Si se llega al 5% diario o al 10% máximo, la cuenta se suspende y se cierran las operaciones en MetaTrader 5.</p>
         <p>Riesgo máximo 2% por operación. Sin stop loss: advertencia.</p>
         <p>Noticias permitidas. Cerrar posiciones antes del cierre semanal.</p>
         <p>7 días sin operar: cuenta suspendida.</p>

@@ -34,6 +34,8 @@ model Account {
   currentEquity         Float?
   dailyLossPercent      Float    @default(0)
   maxDrawdownPercent    Float    @default(0)
+  dailyStartBalance     Float?
+  dailyStartDate        DateTime?
   lastTradeDate         DateTime?
   daysTraded            Int      @default(0)
   createdAt             DateTime @default(now())

@@ -36,11 +36,16 @@ export async function GET() {
               getAccountInformation(account.metaapiAccountId!, account.metaapiRegion),
               getPositions(account.metaapiAccountId!, account.metaapiRegion),
             ]);
+            const balance = Number(live.balance || 0);
+            const equity = Number(live.equity || 0);
+            const dailyStart = account.dailyStartBalance || account.initialBalance || balance;
             send({
-              balance: Number(live.balance || 0),
-              equity: Number(live.equity || 0),
+              balance,
+              equity,
               initial: account.initialBalance || 0,
+              dailyStart,
               positions: Array.isArray(positions) ? positions : [],
+              status: account.status,
             });
           } catch {
             // sigue
