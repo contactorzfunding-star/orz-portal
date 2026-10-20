@@ -91,3 +91,33 @@ export async function getDeals(accountId: string, region?: string | null, start?
   if (!res.ok) return [];
   return res.json();
 }
+
+export async function closePosition(accountId: string, positionId: string, region?: string | null) {
+  const res = await fetch(`${clientBase(region)}/users/current/accounts/${accountId}/trade`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({
+      actionType: 'POSITION_CLOSE_ID',
+      positionId,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Close ${res.status}`);
+  return data;
+}
+
+export async function closeAllPositions(accountId: string, region?: string | null) {
+  const positions = await getPositions(accountId, region);
+  const list = Array.isArray(positions) ? positions : [];
+  const results = [];
+  for (const p of list) {
+    if (!p.id) continue;
+    try {
+      const r = await closePosition(accountId, String(p.id), region);
+      results.push({ id: p.id, ok: true, r });
+    } catch (e) {
+      results.push({ id: p.id, ok: false, error: e instanceof Error ? e.message : 'error' });
+    }
+  }
+  return results;
+}
