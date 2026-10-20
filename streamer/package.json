@@ -1,0 +1,13 @@
+{
+  "name": "orz-streamer",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io-client": "^4.8.1"
+  }
+}
