@@ -53,6 +53,7 @@ export function LivePanel({
   useEffect(() => {
     let on = true;
     let source: EventSource | null = null;
+    let emptyStreak = 0;
 
     function connect() {
       source = new EventSource('/api/live/stream');
@@ -60,7 +61,18 @@ export function LivePanel({
         if (!on) return;
         try {
           const json = JSON.parse(e.data);
-          setData((prev) => ({ ...prev, ...json }));
+          setData((prev) => {
+            const incoming = Array.isArray(json.positions) ? json.positions : [];
+            let positions = incoming;
+            if (incoming.length === 0 && prev.positions.length > 0) {
+              emptyStreak += 1;
+              if (emptyStreak < 6) positions = prev.positions;
+              else emptyStreak = 0;
+            } else {
+              emptyStreak = 0;
+            }
+            return { ...prev, ...json, positions };
+          });
           setLive(true);
         } catch {
           // ignora
@@ -103,7 +115,7 @@ export function LivePanel({
         <p style={{ marginTop: 10 }}>Faltan {money(remainingDaily)} ({remainingPct.toFixed(2)}%) para el límite diario del 5%.</p>
         {data.status === 'suspendida' && <p>Cuenta suspendida.</p>}
         {data.status === 'reprobada' && <p>Cuenta reprobada.</p>}
-        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Se mueve al ritmo de MetaTrader (cada ~100 ms).</p>
+        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Se mueve al ritmo de MetaTrader (cada ~10 ms).</p>
       </section>
 
       <section className="card">
