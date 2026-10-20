@@ -46,11 +46,12 @@ export async function GET() {
               dailyStart,
               positions: Array.isArray(positions) ? positions : [],
               status: account.status,
+              ts: Date.now(),
             });
           } catch {
             // sigue
           }
-          await new Promise((r) => setTimeout(r, 250));
+          await new Promise((r) => setTimeout(r, 100));
         }
       };
 
