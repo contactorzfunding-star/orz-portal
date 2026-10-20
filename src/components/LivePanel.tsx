@@ -42,28 +42,29 @@ export function LivePanel({
 
   useEffect(() => {
     let on = true;
-    let busy = false;
+    let source: EventSource | null = null;
 
-    async function tick() {
-      if (busy) return;
-      busy = true;
-      try {
-        const res = await fetch('/api/live?t=' + Date.now(), { cache: 'no-store' });
-        if (!res.ok) return;
-        const json = await res.json();
-        if (on) setData(json);
-      } catch {
-        // sigue con el último valor
-      } finally {
-        busy = false;
-      }
+    function connect() {
+      source = new EventSource('/api/live/stream');
+      source.onmessage = (e) => {
+        if (!on) return;
+        try {
+          const json = JSON.parse(e.data);
+          setData(json);
+        } catch {
+          // ignora
+        }
+      };
+      source.onerror = () => {
+        source?.close();
+        if (on) setTimeout(connect, 1000);
+      };
     }
 
-    const id = setInterval(tick, 300);
-    tick();
+    connect();
     return () => {
       on = false;
-      clearInterval(id);
+      source?.close();
     };
   }, []);
 
@@ -83,7 +84,7 @@ export function LivePanel({
         <h2>En vivo</h2>
         <p>Ganancia cerrada: {profit >= 0 ? '+' : ''}{money(profit)} ({pct.toFixed(2)}%)</p>
         <p>Flotante: {floating >= 0 ? '+' : ''}{money(floating)}</p>
-        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Se actualiza cada 0.3 segundos.</p>
+        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Canal en vivo. Se mueve cuando cambia MetaTrader.</p>
       </section>
 
       <section className="card">
