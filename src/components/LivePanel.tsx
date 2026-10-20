@@ -42,17 +42,24 @@ export function LivePanel({
 
   useEffect(() => {
     let on = true;
+    let busy = false;
+
     async function tick() {
+      if (busy) return;
+      busy = true;
       try {
-        const res = await fetch('/api/live', { cache: 'no-store' });
+        const res = await fetch('/api/live?t=' + Date.now(), { cache: 'no-store' });
         if (!res.ok) return;
         const json = await res.json();
         if (on) setData(json);
       } catch {
         // sigue con el último valor
+      } finally {
+        busy = false;
       }
     }
-    const id = setInterval(tick, 1000);
+
+    const id = setInterval(tick, 300);
     tick();
     return () => {
       on = false;
@@ -76,7 +83,7 @@ export function LivePanel({
         <h2>En vivo</h2>
         <p>Ganancia cerrada: {profit >= 0 ? '+' : ''}{money(profit)} ({pct.toFixed(2)}%)</p>
         <p>Flotante: {floating >= 0 ? '+' : ''}{money(floating)}</p>
-        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Se actualiza cada segundo, igual que MetaTrader.</p>
+        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Se actualiza cada 0.3 segundos.</p>
       </section>
 
       <section className="card">
