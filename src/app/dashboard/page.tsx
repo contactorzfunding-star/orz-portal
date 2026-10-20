@@ -12,7 +12,7 @@ function money(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function isTrade(d: { type?: string; entryType?: string; profit?: number }) {
+function isTrade(d: { type?: string; entryType?: string }) {
   const t = (d.type || '').toUpperCase();
   if (t.includes('BUY') || t.includes('SELL')) return true;
   if (d.entryType === 'DEAL_ENTRY_IN' || d.entryType === 'DEAL_ENTRY_OUT' || d.entryType === 'DEAL_ENTRY_INOUT') return true;
@@ -36,6 +36,9 @@ type Position = {
   type?: string;
   volume?: number;
   profit?: number;
+  unrealizedProfit?: number;
+  swap?: number;
+  commission?: number;
   openPrice?: number;
   currentPrice?: number;
   id?: string;
@@ -72,9 +75,8 @@ export default async function DashboardPage() {
       balance = Number(live.balance ?? balance);
       equity = Number(live.equity ?? equity);
 
-      if (!initial || initial === 10000) {
-        initial = balance;
-      }
+      // El inicial solo se fija una vez, con el balance de ese momento.
+      if (!initial) initial = balance;
 
       const positions = await getPositions(account.metaapiAccountId, account.metaapiRegion);
       openPositions = Array.isArray(positions) ? positions : [];
@@ -88,14 +90,6 @@ export default async function DashboardPage() {
       hasTrades = trades.length > 0 || openPositions.length > 0;
 
       points = [{ t: 'inicio', v: initial }];
-      let running = initial;
-      for (const deal of trades) {
-        if (deal.entryType === 'DEAL_ENTRY_OUT' || deal.entryType === 'DEAL_ENTRY_INOUT' || deal.profit) {
-          running += Number(deal.profit || 0) + Number(deal.commission || 0) + Number(deal.swap || 0);
-          points.push({ t: deal.time || String(points.length), v: running });
-        }
-        if (deal.time) lastTrade = new Date(deal.time);
-      }
       points.push({ t: 'ahora', v: balance });
 
       const lossPct = Math.max(0, ((initial - balance) / initial) * 100);
@@ -107,7 +101,6 @@ export default async function DashboardPage() {
       else if (hasTrades && daysIdle >= 7) status = 'suspendida';
       else if (status === 'reprobada' || status === 'pendiente') status = 'active';
 
-      // Cierra las operaciones abiertas si se pasó del límite.
       if ((status === 'reprobada' || status === 'suspendida') && openPositions.length > 0) {
         try {
           await closeAllPositions(account.metaapiAccountId, account.metaapiRegion);
@@ -137,6 +130,7 @@ export default async function DashboardPage() {
 
   const profit = balance - initial;
   const profitPct = initial ? (profit / initial) * 100 : 0;
+  const floating = equity - balance;
   const progress = Math.max(0, Math.min(100, (profitPct / (goal * 100)) * 100));
   const lossPct = initial ? Math.max(0, ((initial - balance) / initial) * 100) : 0;
 
@@ -157,13 +151,16 @@ export default async function DashboardPage() {
 
       <section className="card">
         <h2>Avance</h2>
-        <p>Fase {account?.phase || 1} · {status} · {profit >= 0 ? '+' : ''}{money(profit)} ({profitPct.toFixed(2)}%)</p>
+        <p>Fase {account?.phase || 1} · {status}</p>
+        <p>Ganancia cerrada: {profit >= 0 ? '+' : ''}{money(profit)} ({profitPct.toFixed(2)}%)</p>
+        <p>Flotante: {floating >= 0 ? '+' : ''}{money(floating)}</p>
         <EquityChart points={points} initial={initial} goal={goal} />
         <div className="legend">
           <span>Objetivo {Math.round(goal * 100)}%</span>
           <span>Pérdida diaria 5%</span>
           <span>Pérdida máxima 10%</span>
         </div>
+        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Balance y equity salen directo de MetaTrader. El avance se mide sobre balance.</p>
         {status === 'reprobada' && <p>Cuenta reprobada. La pérdida llegó al 10% sobre balance. Las operaciones se cerraron.</p>}
         {status === 'suspendida' && <p>Cuenta suspendida. Pasaron 7 días sin operar. Las operaciones se cerraron.</p>}
         {closedByRule && <p>Se cerraron las posiciones abiertas por límite.</p>}
@@ -178,31 +175,33 @@ export default async function DashboardPage() {
           <p style={{ color: 'rgba(255,255,255,.65)' }}>No hay operaciones abiertas.</p>
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
-            {openPositions.map((p) => (
-              <div key={p.id || p.symbol} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <span>{p.symbol} · {p.type} · {p.volume}</span>
-                <b>{money(Number(p.profit || 0))}</b>
-              </div>
-            ))}
+            {openPositions.map((p) => {
+              const pl = Number(p.unrealizedProfit ?? p.profit ?? 0);
+              return (
+                <div key={p.id || p.symbol} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span>{p.symbol} · {String(p.type || '').replace('POSITION_TYPE_', '')} · {p.volume}</span>
+                  <b>{money(pl)}</b>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
 
       <section className="card">
-        <h2>Operaciones recientes</h2>
+        <h2>Operaciones cerradas</h2>
         {recentDeals.length === 0 ? (
-          <p style={{ color: 'rgba(255,255,255,.65)' }}>Aún no hay operaciones.</p>
+          <p style={{ color: 'rgba(255,255,255,.65)' }}>Aún no hay operaciones cerradas.</p>
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
-            {recentDeals.map((d) => {
-              const net = Number(d.profit || 0) + Number(d.commission || 0) + Number(d.swap || 0);
-              return (
+            {recentDeals
+              .filter((d) => d.entryType === 'DEAL_ENTRY_OUT' || d.entryType === 'DEAL_ENTRY_INOUT' || d.profit)
+              .map((d) => (
                 <div key={d.id || d.time} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span>{d.symbol} · {d.type} · {d.volume}</span>
-                  <b>{money(net)}</b>
+                  <span>{d.symbol} · {String(d.type || '').replace('DEAL_TYPE_', '')} · {d.volume}</span>
+                  <b>{money(Number(d.profit || 0))}</b>
                 </div>
-              );
-            })}
+              ))}
           </div>
         )}
       </section>
