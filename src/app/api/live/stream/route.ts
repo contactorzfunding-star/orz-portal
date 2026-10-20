@@ -61,7 +61,6 @@ export async function GET() {
         try { controller.close(); } catch { /* ya cerrado */ }
       };
 
-      // @ts-expect-error abort signal
       const signal = (globalThis as { __signal?: AbortSignal }).__signal;
       if (signal) signal.addEventListener('abort', close);
     },
