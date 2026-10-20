@@ -24,6 +24,9 @@ export async function GET() {
   const stream = new ReadableStream({
     async start(controller) {
       let open = true;
+      let lastPositions: unknown[] = [];
+      let emptyCount = 0;
+
       const send = (data: unknown) => {
         if (!open) return;
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
@@ -32,26 +35,44 @@ export async function GET() {
       const loop = async () => {
         while (open) {
           try {
-            const [live, positions] = await Promise.all([
+            const [live, positionsRaw] = await Promise.all([
               getAccountInformation(account.metaapiAccountId!, account.metaapiRegion),
               getPositions(account.metaapiAccountId!, account.metaapiRegion),
             ]);
+
             const balance = Number(live.balance || 0);
             const equity = Number(live.equity || 0);
             const dailyStart = account.dailyStartBalance || account.initialBalance || balance;
+
+            let positions = Array.isArray(positionsRaw) ? positionsRaw : [];
+
+            // Evita que una respuesta vacía momentánea borre las operaciones
+            if (positions.length === 0 && lastPositions.length > 0) {
+              emptyCount += 1;
+              if (emptyCount < 8) {
+                positions = lastPositions;
+              } else {
+                lastPositions = [];
+                emptyCount = 0;
+              }
+            } else {
+              lastPositions = positions;
+              emptyCount = 0;
+            }
+
             send({
               balance,
               equity,
               initial: account.initialBalance || 0,
               dailyStart,
-              positions: Array.isArray(positions) ? positions : [],
+              positions,
               status: account.status,
               ts: Date.now(),
             });
           } catch {
-            // sigue
+            // si falla, no borramos lo último que teníamos
           }
-          await new Promise((r) => setTimeout(r, 100));
+          await new Promise((r) => setTimeout(r, 10));
         }
       };
 
