@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "express": "^4.21.2",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "2.4.0"
   }
 }
