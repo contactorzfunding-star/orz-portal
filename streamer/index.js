@@ -1,5 +1,4 @@
 const express = require('express');
-const io = require('socket.io-client');
 const crypto = require('crypto');
 
 const app = express();
@@ -7,6 +6,7 @@ const PORT = process.env.PORT || 3000;
 const METAAPI_TOKEN = process.env.METAAPI_TOKEN || '';
 const STREAM_SECRET = process.env.STREAM_SECRET || '';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://cuenta.orzfunding.com';
+const POLL_MS = 250;
 
 function sign(accountId) {
   return crypto.createHmac('sha256', STREAM_SECRET).update(accountId).digest('hex');
@@ -24,73 +24,49 @@ function verify(accountId, token) {
 
 const pools = new Map();
 
+async function fetchJson(url) {
+  const res = await fetch(url, {
+    headers: { 'auth-token': METAAPI_TOKEN, Accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`${res.status}`);
+  return res.json();
+}
+
 function getPool(accountId, region) {
   const key = `${accountId}:${region || 'new-york'}`;
   if (pools.has(key)) return pools.get(key);
 
   const base = `https://mt-client-api-v1.${region || 'new-york'}.agiliumtrade.ai`;
-  console.log('[stream] connecting', base, accountId);
-
-  const socket = io(base, {
-    path: '/ws',
-    reconnection: true,
-    query: { 'auth-token': METAAPI_TOKEN },
-    transports: ['websocket', 'polling'],
-  });
-
   const pool = {
-    socket,
     clients: new Set(),
     balance: 0,
     equity: 0,
     positions: [],
-    ready: false,
+    timer: null,
+    busy: false,
   };
 
-  socket.on('connect', () => {
-    console.log('[stream] connected', accountId);
-    socket.emit('request', {
-      accountId,
-      type: 'synchronize',
-      requestId: crypto.randomUUID(),
-      startingDealTime: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-      startingHistoryOrderTime: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    });
-  });
-
-  socket.on('synchronization', (data) => {
-    if (!data || data.accountId !== accountId) return;
-    console.log('[stream] event', data.type, accountId);
-    if (data.type === 'accountInformation' && data.accountInformation) {
-      pool.balance = Number(data.accountInformation.balance || 0);
-      pool.equity = Number(data.accountInformation.equity || 0);
-      pool.ready = true;
+  async function tick() {
+    if (pool.busy || pool.clients.size === 0) return;
+    pool.busy = true;
+    try {
+      const [info, positions] = await Promise.all([
+        fetchJson(`${base}/users/current/accounts/${accountId}/account-information`),
+        fetchJson(`${base}/users/current/accounts/${accountId}/positions`),
+      ]);
+      pool.balance = Number(info.balance || 0);
+      pool.equity = Number(info.equity || 0);
+      pool.positions = Array.isArray(positions) ? positions : [];
       broadcast(pool);
+    } catch (e) {
+      console.log('[stream] poll error', accountId, e.message);
+    } finally {
+      pool.busy = false;
     }
-    if (data.type === 'positions' && Array.isArray(data.positions)) {
-      pool.positions = data.positions;
-      pool.ready = true;
-      broadcast(pool);
-    }
-    if (data.type === 'authenticated') {
-      socket.emit('request', {
-        accountId,
-        type: 'synchronize',
-        requestId: crypto.randomUUID(),
-        startingDealTime: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-        startingHistoryOrderTime: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-      });
-    }
-  });
+  }
 
-  socket.on('disconnect', (reason) => {
-    console.log('[stream] disconnect', accountId, reason);
-    pool.ready = false;
-  });
-
-  socket.on('connect_error', (err) => {
-    console.log('[stream] error', accountId, err && err.message);
-  });
+  pool.timer = setInterval(tick, POLL_MS);
+  tick();
 
   pools.set(key, pool);
   return pool;
@@ -130,17 +106,15 @@ app.get('/stream', (req, res) => {
     try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch { /* ignore */ }
   };
 
-  if (pool.ready) {
-    send({
-      balance: pool.balance,
-      equity: pool.equity,
-      positions: pool.positions,
-      initial: Number(initial || 0),
-      dailyStart: Number(dailyStart || 0),
-      status: String(status || 'active'),
-      ts: Date.now(),
-    });
-  }
+  send({
+    balance: pool.balance,
+    equity: pool.equity,
+    positions: pool.positions,
+    initial: Number(initial || 0),
+    dailyStart: Number(dailyStart || 0),
+    status: String(status || 'active'),
+    ts: Date.now(),
+  });
 
   const ping = setInterval(() => {
     try { res.write(': ping\n\n'); } catch { /* ignore */ }
@@ -150,7 +124,7 @@ app.get('/stream', (req, res) => {
     clearInterval(ping);
     pool.clients.delete(res);
     if (pool.clients.size === 0) {
-      try { pool.socket.close(); } catch { /* ignore */ }
+      clearInterval(pool.timer);
       pools.delete(`${accountId}:${region || 'new-york'}`);
     }
   });
