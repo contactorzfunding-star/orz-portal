@@ -28,12 +28,14 @@ function getPool(accountId, region) {
   const key = `${accountId}:${region || 'new-york'}`;
   if (pools.has(key)) return pools.get(key);
 
-  const base = `https://mt-client-api-v1.${region || 'new-york'}.agiliumtrade.agiliumtrade.ai`;
+  const base = `https://mt-client-api-v1.${region || 'new-york'}.agiliumtrade.ai`;
+  console.log('[stream] connecting', base, accountId);
+
   const socket = io(base, {
     path: '/ws',
     reconnection: true,
     query: { 'auth-token': METAAPI_TOKEN },
-    transports: ['websocket'],
+    transports: ['websocket', 'polling'],
   });
 
   const pool = {
@@ -46,11 +48,11 @@ function getPool(accountId, region) {
   };
 
   socket.on('connect', () => {
-    const requestId = crypto.randomUUID();
+    console.log('[stream] connected', accountId);
     socket.emit('request', {
       accountId,
       type: 'synchronize',
-      requestId,
+      requestId: crypto.randomUUID(),
       startingDealTime: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
       startingHistoryOrderTime: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
     });
@@ -58,6 +60,7 @@ function getPool(accountId, region) {
 
   socket.on('synchronization', (data) => {
     if (!data || data.accountId !== accountId) return;
+    console.log('[stream] event', data.type, accountId);
     if (data.type === 'accountInformation' && data.accountInformation) {
       pool.balance = Number(data.accountInformation.balance || 0);
       pool.equity = Number(data.accountInformation.equity || 0);
@@ -80,8 +83,13 @@ function getPool(accountId, region) {
     }
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    console.log('[stream] disconnect', accountId, reason);
     pool.ready = false;
+  });
+
+  socket.on('connect_error', (err) => {
+    console.log('[stream] error', accountId, err && err.message);
   });
 
   pools.set(key, pool);
