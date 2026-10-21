@@ -1,4 +1,5 @@
 const express = require('express');
+const io = require('socket.io-client');
 const crypto = require('crypto');
 
 const app = express();
@@ -6,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 const METAAPI_TOKEN = process.env.METAAPI_TOKEN || '';
 const STREAM_SECRET = process.env.STREAM_SECRET || '';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://cuenta.orzfunding.com';
-const POLL_MS = 250;
+const POLL_MS = 100;
 
 function sign(accountId) {
   return crypto.createHmac('sha256', STREAM_SECRET).update(accountId).digest('hex');
@@ -44,6 +45,7 @@ function getPool(accountId, region) {
     positions: [],
     timer: null,
     busy: false,
+    socket: null,
   };
 
   async function tick() {
@@ -59,14 +61,50 @@ function getPool(accountId, region) {
       pool.positions = Array.isArray(positions) ? positions : [];
       broadcast(pool);
     } catch (e) {
-      console.log('[stream] poll error', accountId, e.message);
+      console.log('[stream] poll', accountId, e.message);
     } finally {
       pool.busy = false;
     }
   }
 
+  function connectWs() {
+    const socket = io(base, {
+      path: '/ws',
+      reconnection: true,
+      query: { 'auth-token': METAAPI_TOKEN },
+      transports: ['websocket'],
+    });
+    pool.socket = socket;
+    socket.on('connect', () => {
+      console.log('[stream] ws connected', accountId);
+      socket.emit('request', {
+        accountId,
+        type: 'synchronize',
+        requestId: crypto.randomUUID(),
+        startingDealTime: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+        startingHistoryOrderTime: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+      });
+    });
+    socket.on('synchronization', (data) => {
+      if (!data || data.accountId !== accountId) return;
+      if (data.type === 'accountInformation' && data.accountInformation) {
+        pool.balance = Number(data.accountInformation.balance || pool.balance);
+        pool.equity = Number(data.accountInformation.equity || pool.equity);
+        broadcast(pool);
+      }
+      if (data.type === 'positions' && Array.isArray(data.positions)) {
+        pool.positions = data.positions;
+        broadcast(pool);
+      }
+    });
+    socket.on('connect_error', (err) => {
+      console.log('[stream] ws error', accountId, err && err.message);
+    });
+  }
+
   pool.timer = setInterval(tick, POLL_MS);
   tick();
+  connectWs();
 
   pools.set(key, pool);
   return pool;
@@ -125,6 +163,7 @@ app.get('/stream', (req, res) => {
     pool.clients.delete(res);
     if (pool.clients.size === 0) {
       clearInterval(pool.timer);
+      try { pool.socket && pool.socket.close(); } catch { /* ignore */ }
       pools.delete(`${accountId}:${region || 'new-york'}`);
     }
   });
