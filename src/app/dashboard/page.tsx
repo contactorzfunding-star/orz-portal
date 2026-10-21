@@ -6,6 +6,7 @@ import { getAccountInformation, getDeals, getPositions, closeAllPositions } from
 import { EquityChart } from '@/components/EquityChart';
 import { LivePanel } from '@/components/LivePanel';
 import { NameForm } from '@/components/NameForm';
+import { Withdrawal } from '@/components/Withdrawal';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -155,6 +156,7 @@ export default async function DashboardPage() {
   const remainingDailyPct = dailyStart ? Math.max(0, 5 - dailyLossPct) : 5;
   const remainingMaxUsd = Math.max(0, (initial * 0.10) - Math.max(0, initial - balance));
   const remainingMaxPct = Math.max(0, 10 - maxLossPct);
+  const canWithdraw = status === 'fondeada' || status === 'aprobada';
 
   return (
     <div className="page">
@@ -191,6 +193,8 @@ export default async function DashboardPage() {
           <p style={{ color: 'rgba(255,255,255,.65)' }}>MetaTrader aún no está conectado.</p>
         )}
       </section>
+
+      <Withdrawal enabled={canWithdraw} userId={user.id} />
 
       <section className="card">
         <h2>Operaciones cerradas</h2>
