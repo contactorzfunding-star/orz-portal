@@ -1,5 +1,5 @@
 const express = require('express');
-const { io } = require('socket.io-client');
+const io = require('socket.io-client');
 const crypto = require('crypto');
 
 const app = express();
