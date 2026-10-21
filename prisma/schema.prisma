@@ -10,6 +10,7 @@ datasource db {
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
+  name          String?
   isFounder     Boolean   @default(false)
   isOwner       Boolean   @default(false)
   attemptsLeft  Int       @default(3)
