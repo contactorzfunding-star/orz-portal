@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getAccountInformation, getDeals, getPositions, closeAllPositions } from '@/lib/metaapi';
 import { EquityChart } from '@/components/EquityChart';
 import { LivePanel } from '@/components/LivePanel';
+import { NameForm } from '@/components/NameForm';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -158,8 +159,8 @@ export default async function DashboardPage() {
   return (
     <div className="page">
       <p className="kicker">Portal del cliente</p>
-      <h1>Hola</h1>
-      <p style={{ marginTop: -6, color: 'rgba(255,255,255,.7)' }}>{user.email}</p>
+      <NameForm initial={user.name} />
+      <p style={{ marginTop: 6, color: 'rgba(255,255,255,.7)' }}>{user.email}</p>
       {user.isFounder && (
         <div className="badge">Acceso Fundador · Reparto 90/10 · Intentos {user.attemptsLeft}</div>
       )}
