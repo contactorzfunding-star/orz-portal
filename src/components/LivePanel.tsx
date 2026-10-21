@@ -49,7 +49,7 @@ export function LivePanel({
     status,
   });
   const [live, setLive] = useState(false);
-  const [sourceLabel, setSourceLabel] = useState('local');
+  const [sourceLabel, setSourceLabel] = useState('conectando');
 
   useEffect(() => {
     let on = true;
@@ -58,20 +58,27 @@ export function LivePanel({
 
     async function connect() {
       let url = '/api/live/stream';
+      let label = 'local';
       try {
         const res = await fetch('/api/live/token');
         if (res.ok) {
           const json = await res.json();
           if (json.url) {
             url = json.url;
-            setSourceLabel('en vivo');
+            label = 'render';
+          } else {
+            label = 'local (sin url)';
           }
+        } else {
+          label = `local (${res.status})`;
         }
       } catch {
-        // fallback al canal local
+        label = 'local (error)';
       }
 
       if (!on) return;
+      setSourceLabel(label);
+
       source = new EventSource(url);
       source.onmessage = (e) => {
         if (!on) return;
@@ -97,7 +104,7 @@ export function LivePanel({
       source.onerror = () => {
         setLive(false);
         source?.close();
-        if (on) setTimeout(connect, 1500);
+        if (on) setTimeout(connect, 2000);
       };
     }
 
@@ -131,7 +138,7 @@ export function LivePanel({
         <p style={{ marginTop: 10 }}>Faltan {money(remainingDaily)} ({remainingPct.toFixed(2)}%) para el límite diario del 5%.</p>
         {data.status === 'suspendida' && <p>Cuenta suspendida.</p>}
         {data.status === 'reprobada' && <p>Cuenta reprobada.</p>}
-        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Canal en vivo. Se mueve cuando cambia MetaTrader.</p>
+        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 13 }}>Canal: {sourceLabel}. {sourceLabel.startsWith('render') ? 'En vivo desde Render.' : 'Usando canal local (más lento).'}</p>
       </section>
 
       <section className="card">
