@@ -158,6 +158,16 @@ export default function AdminPage() {
             <span className="badge">{acc.status}</span>
           </div>
           <div className="fields">
+            <label>Estado
+              <select defaultValue={acc.status} onChange={(e) => updateAccount(acc.id, { status: e.target.value })}>
+                <option value="active">En progreso</option>
+                <option value="aprobada">Aprobada</option>
+                <option value="fondeada">Fondeada</option>
+                <option value="suspendida">Suspendida</option>
+                <option value="reprobada">Reprobada</option>
+                <option value="pendiente">Pendiente</option>
+              </select>
+            </label>
             <label>Login MT5<input defaultValue={acc.mt5Login || ''} onBlur={(e) => updateAccount(acc.id, { mt5Login: e.target.value })} /></label>
             <label>Servidor<input defaultValue={acc.mt5Server || ''} onBlur={(e) => updateAccount(acc.id, { mt5Server: e.target.value })} placeholder="PepperstoneGmbH-Demo" /></label>
             <label>Contraseña de inversionista<input type="password" placeholder="Solo si la cambias" onBlur={(e) => { if (e.target.value) updateAccount(acc.id, { mt5InvestorPassword: e.target.value }); }} /></label>
