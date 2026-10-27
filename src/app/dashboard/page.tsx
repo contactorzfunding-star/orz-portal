@@ -187,7 +187,7 @@ export default async function DashboardPage() {
         </div>
         {status === 'reprobada' && <p>Cuenta reprobada. La pérdida llegó al 10% sobre balance. Las operaciones se cerraron en MetaTrader 5.</p>}
         {status === 'suspendida' && dailyLossPct >= 5 && <p>Cuenta suspendida. Llegó al límite de pérdida diaria del 5% sobre balance. Las operaciones se cerraron en MetaTrader 5.</p>}
-        {status === 'suspendida' && dailyLossPct < 5 && <p>Cuenta suspendida. Pasaron 7 días sin operar. Las operaciones se cerraron.</p>}
+        {status === 'suspendida' && dailyLossPct < 5 && <p>Cuenta suspendida. Pasaron 7 días sin una operación ejecutada. La reactivación solo por canal oficial.</p>}
         {closedByRule && <p>Se cerraron las posiciones abiertas por límite.</p>}
         {!account?.metaapiAccountId && (
           <p style={{ color: 'rgba(255,255,255,.65)' }}>MetaTrader aún no está conectado.</p>
@@ -233,10 +233,11 @@ export default async function DashboardPage() {
         <p>Objetivo Fase 1: 8%. Fase 2: 5%. Mínimo 3 días. Sin límite de tiempo.</p>
         <p>Pérdida diaria 5% y máxima 10% sobre balance, no sobre equity.</p>
         <p>Si se llega al 5% diario o al 10% máximo, la cuenta se suspende y se cierran las operaciones en MetaTrader 5.</p>
-        <p>Riesgo máximo 2% por operación. Sin stop loss: advertencia.</p>
+        <p>No hay límite fijo de riesgo por operación. La relación 1:2 es solo recomendación.</p>
         <p>Noticias permitidas. Cerrar posiciones antes del cierre semanal.</p>
-        <p>7 días sin operar: cuenta suspendida.</p>
-        <p>Copy trading prohibido. Robot solo si cumple las reglas.</p>
+        <p>7 días sin una operación ejecutada: cuenta suspendida. Reactivación solo por canal oficial.</p>
+        <p>Copy trading prohibido por completo. Robot solo si cumple las reglas.</p>
+        <p>Cuenta tipo Standard. Credenciales solo por el sistema de ORZ Funding, con identidad verificada.</p>
         <p>El capital de la fase es simulado. Lo que se paga en dinero real es la ganancia elegible.</p>
       </section>
 
